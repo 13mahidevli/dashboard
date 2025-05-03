@@ -1,329 +1,280 @@
 import React, { useState, useEffect } from "react";
-import "./App.css";
-import Cell from "./component/Cell";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-export default function App() {
-  const gridSize = 10;
+const getMarkerColor = (type) => {
+  switch (type) {
+    case "Accident":
+      return "blue";
+    case "Assault":
+      return "red";
+    default:
+      return "gray";
+  }
+};
 
-  // State to manage the game message
-  const [mess, setMess] = useState("choose a bubble");
-  //make a array of grid size so that we can check if cell is null or is clicked so that we can fill it with cross or trophy
-  const [cell, setCell] = useState(Array(gridSize).fill(null));
-  //to check when we won
-  const [iswon, setiswon] = useState("");
-  //to change the color of messages
-  const [color, setcolor] = useState("black");
-  //to disable the cells
-  const [isdisabled, setisdisabled] = useState(false);
-  //to check the current cell we have clicked
-  const [currcell, setcurrcell] = useState("");
-  //to make an array of all the index we have clicked so far
-  const [arrayofcell, setarrayofcell] = useState([]);
-  //to set position and treasurePosition
-  const [position, setposition] = useState(7);
-  const [treasurePosition, setTreasurePosition] = useState(position * position);
-  //to collect time
-  const [time, settime] = useState(0);
-  //to save the treasurePosition history where all keys had been
-  const [positionhistory, setpositionhistory] = useState([]);
-  //to save the Position history where all keys had been
-  const [treasurepositionhistory, settreasurepositionhistory] = useState([]);
-  const [display, setdisplay] = useState("none");
-  const [boxblur, setboxblur] = useState("0");
+const createIcon = (color) =>
+  new L.Icon({
+    iconUrl: `https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png`,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowUrl: `https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png`,
+    shadowSize: [41, 41],
+  });
+
+export default function EmergencyDashboard() {
+  const [emergencyData, setEmergencyData] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [address, setAddress] = useState("");
+
+  // Fetch emergency data from backend on load
   useEffect(() => {
-    setposition(1);
-    console.log(treasurepositionhistory);
-    console.log("position", position);
-    console.log("treasureposition", treasurePosition);
-    const timeinterval = setInterval(() => {
-      settime((prevtime) => prevtime + 1);
-    }, 1000);
-    return () => clearInterval(timeinterval);
+    const fetchData = async () => {
+      try {
+        const res = await fetch("http://localhost:3000/api/emergencies");
+        const data = await res.json();
+        setEmergencyData(data);
+      } catch (error) {
+        console.error("Failed to fetch emergency data:", error);
+      }
+    };
+
+    fetchData();
   }, []);
 
-  // useEffect(() => {
-  //   if (time == 10) {
-  //     setMess("timedone");
-  //   }
-  // }, [time]);
-
-  // To manage the click event on each cell
-  const handleCellClick = (index) => {
-    //making array of selected index
-    const selectedcell = [...arrayofcell, index];
-    setarrayofcell(selectedcell);
-    console.log(selectedcell);
-
-    //making of all cell to check if they are filled
-    const newcells = [...cell];
-    newcells[index] = "clicked";
-    setCell(newcells);
-    console.log(newcells);
-
-    //setting current cell
-    setcurrcell(index);
-
-    // Change treasure position after each click
-    if (index === treasurePosition) {
-      setMess("You Got the Key 🗝️!!!");
-      setcolor("yellow");
-      setiswon(true);
-      return;
-    } else {
-      setMess("Try Again!!!");
-      setcolor("brown");
-      setiswon(false);
-    }
-
-    //if cell is clicked not null then show this
-    if (cell[index]) {
-      setMess("you already choose this");
-      setcolor("red");
-      return;
-    }
-
-    console.log("index", index);
-    //changing position
-    setposition((prevposition) => prevposition + 1);
-    //creating a set so that we use new value of treasureposition
-    let set = position * position;
-    setTreasurePosition(position * position);
-    console.log("position", position);
-    console.log("treasurePosition", treasurePosition);
-    //creating array to store values of history of positions
-    settreasurepositionhistory((prevhistory) => [
-      ...prevhistory,
-      treasurePosition,
-    ]);
-    setpositionhistory((phistory) => [...phistory, position]);
-    console.log(positionhistory);
-    console.log(treasurepositionhistory);
-
-    //stopping the game
-    if (selectedcell.length == 11) {
-      setMess("gave over");
-      setisdisabled(true);
+  const handleDetailClick = async (incident) => {
+    setSelectedUser(incident);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${incident.location.lat}&lon=${incident.location.lng}`
+      );
+      const data = await res.json();
+      setAddress(data.display_name || "Unknown location");
+    } catch (error) {
+      console.error("Reverse geocoding failed:", error);
+      setAddress("Unknown location");
     }
   };
 
-  function showhint() {
-    setdisplay("block");
-    setboxblur(4);
-  }
+  const MapCenterUpdater = ({ position }) => {
+    const map = useMap();
 
-  function remove() {
-    setdisplay("none");
-    setboxblur(0);
-  }
+    useEffect(() => {
+      if (position) {
+        map.flyTo(position, 13);
+      }
+    }, [position, map]);
 
-  // Main code of the game
+    return null;
+  };
+
+  const handleStatusChange = (newStatus) => {
+    if (!selectedUser) return;
+    const updatedData = emergencyData.map((incident) =>
+      incident._id === selectedUser._id
+        ? { ...incident, status: newStatus }
+        : incident
+    );
+    setEmergencyData(updatedData);
+    setSelectedUser((prev) => ({ ...prev, status: newStatus }));
+  };
+
+  const closeModal = () => {
+    setSelectedUser(null);
+    setAddress("");
+  };
+
   return (
-    <div className="box">
-      <div style={{ filter: `blur(${boxblur}px)` }} className="blockone">
-        <p className="mess" style={{ color: color }}>{mess}</p>
-        <div className="instruction">
-          <button onClick={showhint} className="hintbox">
-            𝐡𝐢𝐧𝐭!!
-          </button>
-          <h1>Instructions</h1>
-          𝐓𝐡𝐞𝐫𝐞 𝐚𝐫𝐞 𝟭𝟬𝟬 𝐛𝐮𝐛𝐛𝐥𝐞𝐬 𝐨𝐧 𝐭𝐡𝐞 𝐬𝐜𝐫𝐞𝐞𝐧... <br></br> 𝐈𝐟 𝐲𝐨𝐮 𝐜𝐥𝐢𝐜𝐤 𝐭𝐡𝐞
-          𝐫𝐢𝐠𝐡𝐭 𝐛𝐮𝐛𝐛𝐥𝐞 𝐲𝐨𝐮 𝐮𝐧𝐥𝐨𝐜𝐤 𝐚 𝐬𝐩𝐞𝐜𝐢𝐚𝐥 𝐤𝐞𝐲(🗝️) 𝐭𝐨 𝐭𝐡𝐞 𝐧𝐞𝐱𝐭 𝐩𝐮𝐳𝐳𝐥𝐞.{" "}
-          <br></br> (𝐁𝐮𝐭 𝐭𝐡𝐞𝐫𝐞 𝐢𝐬 𝐚 𝐜𝐚𝐭𝐜𝐡)<br></br> ***𝐘𝐨𝐮 𝐡𝐚𝐯𝐞 𝟏𝟏 𝐜𝐡𝐚𝐧𝐜𝐞𝐬***
-          <br></br>
-          𝐄𝐚𝐜𝐡 𝐭𝐢𝐦𝐞 𝐲𝐨𝐮 𝐜𝐥𝐢𝐜𝐤 𝐭𝐡𝐞 𝐰𝐫𝐨𝐧𝐠 𝐛𝐮𝐛𝐛𝐥𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐭𝐞𝐥𝐞𝐩𝐨𝐫𝐭𝐬 𝐭𝐨 𝐭𝐡𝐞 𝐚𝐧𝐨𝐭𝐡𝐞𝐫
-          𝐛𝐮𝐛𝐛𝐥𝐞 𝐚𝐧𝐝 𝐭𝐡𝐞 𝐛𝐮𝐛𝐛𝐥𝐞 𝐰𝐡𝐞𝐫𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐰𝐚𝐬 𝐭𝐮𝐫𝐧𝐬 𝐛𝐥𝐚𝐜𝐤🚩.<br></br> 𝐓𝐡𝐞
-          𝐠𝐚𝐦𝐞 𝐬𝐡𝐨𝐰𝐬 "❌" 𝐟𝐨𝐫 𝐚𝐥𝐫𝐞𝐚𝐝𝐲 𝐜𝐥𝐢𝐜𝐤𝐞𝐝 𝐛𝐮𝐛𝐛𝐥𝐞𝐬.
-          <br></br>𝐄𝐚𝐜𝐡 𝐭𝐢𝐦𝐞 𝐲𝐨𝐮 𝐜𝐥𝐢𝐜𝐤 𝐭𝐡𝐞 𝐰𝐫𝐨𝐧𝐠 𝐛𝐮𝐛𝐛𝐥𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐭𝐞𝐥𝐞𝐩𝐨𝐫𝐭𝐬 𝐭𝐨 𝐭𝐡𝐞
-          𝐚𝐧𝐨𝐭𝐡𝐞𝐫 𝐛𝐮𝐛𝐛𝐥𝐞 𝐚𝐧𝐝 𝐭𝐡𝐞 𝐛𝐮𝐛𝐛𝐥𝐞 𝐰𝐡𝐞𝐫𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐰𝐚𝐬 𝐭𝐮𝐫𝐧𝐬 𝐛𝐥𝐚𝐜𝐤🚩
-          <br></br>
+    <div className="p-4 space-y-6">
+      <h1 className="text-3xl font-bold mb-4">Emergency Dashboard</h1>
+
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* Table View */}
+        <div className="flex-1 overflow-x-auto rounded-lg shadow">
+          <table className="min-w-full bg-white dark:bg-gray-800">
+            <thead>
+              <tr className="bg-gray-200 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-100">
+                <th className="px-4 py-3">User ID</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Latitude</th>
+                <th className="px-4 py-3">Longitude</th>
+                <th className="px-4 py-3">Time</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {emergencyData.map((incident) => (
+                <tr
+                  key={incident._id}
+                  className="border-t dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100"
+                >
+                  <td className="px-4 py-2 text-gray-600">{incident.id}</td>
+                  <td className="px-4 py-2 text-gray-600">{incident.name}</td>
+                  <td className="px-4 py-2 text-gray-600">
+                    {incident.location.lat}
+                  </td>
+                  <td className="px-4 py-2 text-gray-600">
+                    {incident.location.lng}
+                  </td>
+                  <td className="px-4 py-2 text-gray-600">
+                    {new Date(incident.time).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-gray-600">{incident.type}</td>
+                  <td className="px-4 py-2 text-gray-600">{incident.status}</td>
+                  <td className="px-4 py-2 text-gray-600">
+                    <button
+                      className="text-blue-500 underline"
+                      onClick={() => handleDetailClick(incident)}
+                    >
+                      Detail
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="boxes">
-          <div className="clicked">chance played: {arrayofcell.length}</div>
-          <div className="clicked">Time: {time}</div>
+
+        {/* Map View */}
+        <div className="flex-1 h-[500px] z-10 m-2 border-4 border-gray-700 rounded-xl shadow">
+          <MapContainer
+            center={[30.5937, 78.9629]} // Initial center
+            zoom={13}
+            className="w-full h-full rounded-xl"
+          >
+            <MapCenterUpdater
+              position={
+                emergencyData.length > 0
+                  ? [
+                      emergencyData[0].location.lat,
+                      emergencyData[0].location.lng,
+                    ]
+                  : null
+              }
+            />
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="&copy; OpenStreetMap contributors"
+            />
+
+            {emergencyData.map((incident) => (
+              <Marker
+                key={incident._id}
+                position={[incident.location.lat, incident.location.lng]}
+                icon={createIcon(getMarkerColor(incident.type))}
+              >
+                <Tooltip direction="top" offset={[0, -20]} permanent>
+                  {incident.name}
+                </Tooltip>
+
+                <Popup>
+                  <div>
+                    <p>
+                      <strong>User:</strong> {incident.name} ({incident.id})
+                    </p>
+                    <p>
+                      <strong>Time:</strong>{" "}
+                      {new Date(incident.time).toLocaleString()}
+                    </p>
+                    <p>
+                      <strong>Type:</strong> {incident.type}
+                    </p>
+                    <p>
+                      <strong>Status:</strong> {incident.status}
+                    </p>
+                    <p>
+                      <strong>Location:</strong> {incident.location.lat},{" "}
+                      {incident.location.lng}
+                    </p>
+                    <button
+                      className="text-blue-500 underline"
+                      onClick={() => handleDetailClick(incident)}
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
         </div>
       </div>
 
-      <div style={{ filter: `blur(${boxblur}px)` }} className="grid">
-        {Array.from({ length: gridSize }).map((_, colindex) => (
-          <div key={colindex} className="row">
-            {Array.from({ length: gridSize }).map((_, rowindex) => {
-              const cellindex = rowindex * gridSize + colindex + 1;
-              return (
-                <Cell
-                  key={cellindex}
-                  id={cellindex}
-                  handleclick={handleCellClick}
-                  isselected={currcell === cellindex}
-                  iswon={iswon}
-                  disabled={isdisabled}
-                  selectedcell={arrayofcell}
-                  treasureposition={treasurepositionhistory}
-                />
-              );
-            })}
+      {/* Popup Modal for User Details */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-96 shadow-lg relative">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-red-500"
+              onClick={closeModal}
+            >
+              ✕
+            </button>
+            <h2 className="text-xl font-bold mb-4">User Detail</h2>
+
+            <img
+              src={`https://randomuser.me/api/portraits/men/${Math.min(
+                Math.abs(parseInt((selectedUser.id || "").replace(/\D/g, ""))) %
+                  100,
+                99
+              )}.jpg`}
+              alt="User"
+              className="w-24 h-24 rounded-full mb-4 mx-auto"
+            />
+
+            <div className="text-sm space-y-2">
+              <p>
+                <strong>Name:</strong> {selectedUser.name}
+              </p>
+              <p>
+                <strong>User ID:</strong> {selectedUser.id}
+              </p>
+              <p>
+                <strong>Type:</strong> {selectedUser.type}
+              </p>
+              <p>
+                <strong>Status:</strong>
+                <div className="mt-1">
+                  {["New", "In Progress", "Resolved"].map((status) => (
+                    <label
+                      key={status}
+                      className="inline-flex items-center mr-4"
+                    >
+                      <input
+                        type="radio"
+                        className="form-radio text-blue-600"
+                        name="status"
+                        value={status}
+                        checked={selectedUser.status === status}
+                        onChange={() => handleStatusChange(status)}
+                      />
+                      <span className="ml-1">{status}</span>
+                    </label>
+                  ))}
+                </div>
+              </p>
+              <p>
+                <strong>Time:</strong>{" "}
+                {new Date(selectedUser.time).toLocaleString()}
+              </p>
+              <p>
+                <strong>Location:</strong> {address}
+              </p>
+            </div>
           </div>
-        ))}
-      </div>
-      <div style={{ display: display }} className="hint-given">
-        <div
-          style={{ display: display }}
-          onClick={remove}
-          className="remove-hintbox"
-        >
-          ❌
         </div>
-        ***HINT***
-      </div>
+      )}
     </div>
   );
 }
-
-// import React, { useState, useEffect } from "react";
-// import "./App.css";
-// import Cell from "./component/Cell";
-
-// export default function App() {
-//   const gridSize = 10;
-
-//   // State to manage the game message
-//   const [mess, setMess] = useState("choose a bubble");
-//   //to check when we won
-//   const [iswon, setiswon] = useState("");
-//   //to change the color of messages
-//   const [color, setcolor] = useState("black");
-//   //to disable the cells
-//   const [isdisabled, setisdisabled] = useState(false);
-//   //to check the current cell we have clicked
-//   const [currcell, setcurrcell] = useState("");
-//   //to make an array of all the index we have clicked so far
-//   const [arrayofcell, setarrayofcell] = useState([]);
-//   //to set position and treasurePosition
-//   const [position, setposition] = useState(7);
-//   const [treasurePosition, setTreasurePosition] = useState(position * position);
-//   //to collect time
-//   const [time, settime] = useState(0);
-//   //to save the treasurePosition history where all keys had been
-//   const [positionhistory, setpositionhistory] = useState([]);
-//   //to save the Position history where all keys had been
-//   const [treasurepositionhistory, settreasurepositionhistory] = useState([]);
-//   const [display, setdisplay] = useState("none");
-//   const [boxblur, setboxblur] = useState("0");
-
-//   useEffect(() => {
-//     setposition(1);
-//     const timeinterval = setInterval(() => {
-//       settime((prevtime) => prevtime + 1);
-//     }, 1000);
-//     return () => clearInterval(timeinterval);
-//   }, []);
-
-//   const handleCellClick = (index) => {
-//     //making array of selected index
-//     const selectedcell = [...arrayofcell, index];
-//     setarrayofcell(selectedcell);
-
-//     //setting current cell
-//     setcurrcell(index);
-
-//     // Change treasure position after each click
-//     if (index === treasurePosition) {
-//       setMess("You Got the Key 🗝️!!!");
-//       setcolor("yellow");
-//       setiswon(true);
-//       return;
-//     } else {
-//       setMess("Try Again!!!");
-//       setcolor("brown");
-//       setiswon(false);
-//     }
-
-//     //changing position
-//     setposition((prevposition) => prevposition + 1);
-//     //creating a set so that we use new value of treasureposition
-//     let set = position * position;
-//     setTreasurePosition(position * position);
-//     //creating array to store values of history of positions
-//     settreasurepositionhistory((prevhistory) => [
-//       ...prevhistory,
-//       treasurePosition,
-//     ]);
-//     setpositionhistory((phistory) => [...phistory, position]);
-
-//     //stopping the game
-//     if (selectedcell.length == 11) {
-//       setMess("gave over");
-//       setisdisabled(true);
-//     }
-//   };
-
-//   function showhint() {
-//     setdisplay("block");
-//     setboxblur(4);
-//   }
-
-//   function remove() {
-//     setdisplay("none");
-//     setboxblur(0);
-//   }
-
-//   // Main code of the game
-//   return (
-//     <div className="box">
-//       <div style={{ filter: `blur(${boxblur}px)` }} className="blockone">
-//         <h1 style={{ color: color }}>{mess}</h1>
-//         <div className="instruction">
-//           <button onClick={showhint} className="hintbox">
-//             𝐡𝐢𝐧𝐭!!
-//           </button>
-//           <h1 className="my-3">Instructions</h1>
-//           𝐓𝐡𝐞𝐫𝐞 𝐚𝐫𝐞 𝟭𝟬𝟬 𝐛𝐮𝐛𝐛𝐥𝐞𝐬 𝐨𝐧 𝐭𝐡𝐞 𝐬𝐜𝐫𝐞𝐞𝐧... <br></br> 𝐈𝐟 𝐲𝐨𝐮 𝐜𝐥𝐢𝐜𝐤 𝐭𝐡𝐞
-//           𝐫𝐢𝐠𝐡𝐭 𝐛𝐮𝐛𝐛𝐥𝐞 𝐲𝐨𝐮 𝐮𝐧𝐥𝐨𝐜𝐤 𝐚 𝐬𝐩𝐞𝐜𝐢𝐚𝐥 𝐤𝐞𝐲(🗝️) 𝐭𝐨 𝐭𝐡𝐞 𝐧𝐞𝐱𝐭 𝐩𝐮𝐳𝐳𝐥𝐞.{" "}
-//           <br></br> (𝐁𝐮𝐭 𝐭𝐡𝐞𝐫𝐞 𝐢𝐬 𝐚 𝐜𝐚𝐭𝐜𝐡)<br></br> ***𝐘𝐨𝐮 𝐡𝐚𝐯𝐞 𝟏𝟏 𝐜𝐡𝐚𝐧𝐜𝐞𝐬***
-//           <br></br>
-//           𝐄𝐚𝐜𝐡 𝐭𝐢𝐦𝐞 𝐲𝐨𝐮 𝐜𝐥𝐢𝐜𝐤 𝐭𝐡𝐞 𝐰𝐫𝐨𝐧𝐠 𝐛𝐮𝐛𝐛𝐥𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐭𝐞𝐥𝐞𝐩𝐨𝐫𝐭𝐬 𝐭𝐨 𝐭𝐡𝐞 𝐚𝐧𝐨𝐭𝐡𝐞𝐫
-//           𝐛𝐮𝐛𝐛𝐥𝐞 𝐚𝐧𝐝 𝐭𝐡𝐞 𝐛𝐮𝐛𝐛𝐥𝐞 𝐰𝐡𝐞𝐫𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐰𝐚𝐬 𝐭𝐮𝐫𝐧𝐬 𝐛𝐥𝐚𝐜𝐤🚩.<br></br> 𝐓𝐡𝐞
-//           𝐠𝐚𝐦𝐞 𝐬𝐡𝐨𝐰𝐬 "❌" 𝐟𝐨𝐫 𝐚𝐥𝐫𝐞𝐚𝐝𝐲 𝐜𝐥𝐢𝐜𝐤𝐞𝐝 𝐛𝐮𝐛𝐛𝐥𝐞𝐬.
-//           <br></br>𝐄𝐚𝐜𝐡 𝐭𝐢𝐦𝐞 𝐲𝐨𝐮 𝐜𝐥𝐢𝐜𝐤 𝐭𝐡𝐞 𝐰𝐫𝐨𝐧𝐠 𝐛𝐮𝐛𝐛𝐥𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐭𝐞𝐥𝐞𝐩𝐨𝐫𝐭𝐬 𝐭𝐨 𝐭𝐡𝐞
-//           𝐚𝐧𝐨𝐭𝐡𝐞𝐫 𝐛𝐮𝐛𝐛𝐥𝐞 𝐚𝐧𝐝 𝐭𝐡𝐞 𝐛𝐮𝐛𝐛𝐥𝐞 𝐰𝐡𝐞𝐫𝐞 𝐭𝐡𝐞 𝐤𝐞𝐲 𝐰𝐚𝐬 𝐭𝐮𝐫𝐧𝐬 𝐛𝐥𝐚𝐜𝐤🚩
-//           <br></br>
-//         </div>
-//         <div className="boxes">
-//           <div className="clicked">chance played: {arrayofcell.length}</div>
-//           <div className="clicked">Time: {time}</div>
-//         </div>
-//       </div>
-
-//       <div style={{ filter: `blur(${boxblur}px)` }} className="grid">
-//         {Array.from({ length: gridSize }).map((_, colindex) => (
-//           <div key={colindex} className="row">
-//             {Array.from({ length: gridSize }).map((_, rowindex) => {
-//               const cellindex = rowindex * gridSize + colindex + 1;
-//               return (
-//                 <Cell
-//                   key={cellindex}
-//                   id={cellindex}
-//                   handleclick={handleCellClick}
-//                   isselected={currcell === cellindex}
-//                   iswon={iswon}
-//                   disabled={isdisabled}
-//                   selectedcell={arrayofcell}
-//                   treasureposition={treasurepositionhistory}
-//                 />
-//               );
-//             })}
-//           </div>
-//         ))}
-//       </div>
-//       <div style={{ display: display }} className="hint-given">
-//         ***HINT***
-//       </div>
-//       <div
-//         style={{ display: display }}
-//         onClick={remove}
-//         className="remove-hintbox"
-//       >
-//         ❌
-//       </div>
-//     </div>
-//   );
-// }
