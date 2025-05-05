@@ -9,6 +9,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import LoginForm from "./components/login";
 
 const getMarkerColor = (type) => {
   switch (type) {
@@ -77,15 +78,35 @@ export default function EmergencyDashboard() {
     return null;
   };
 
-  const handleStatusChange = (newStatus) => {
+  const handleStatusChange = async (newStatus) => {
     if (!selectedUser) return;
-    const updatedData = emergencyData.map((incident) =>
-      incident._id === selectedUser._id
-        ? { ...incident, status: newStatus }
-        : incident
-    );
-    setEmergencyData(updatedData);
-    setSelectedUser((prev) => ({ ...prev, status: newStatus }));
+
+    // Update on server
+    try {
+      const response = await fetch(
+        `http://localhost:3000/api/emergencies/${selectedUser._id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to update status");
+
+      // If successful, update local state
+      const updatedData = emergencyData.map((incident) =>
+        incident._id === selectedUser._id
+          ? { ...incident, status: newStatus }
+          : incident
+      );
+      setEmergencyData(updatedData);
+      setSelectedUser((prev) => ({ ...prev, status: newStatus }));
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
   };
 
   const closeModal = () => {
@@ -94,12 +115,16 @@ export default function EmergencyDashboard() {
   };
 
   return (
-    <div className="p-4 space-y-6">
-      <h1 className="text-3xl font-bold mb-4">Emergency Dashboard</h1>
+    <div className="p-4 space-y-6  min-h-screen">
+      <footer className="fixed top-0 left-0 w-full bg-gray-800 text-white py-3 shadow-md z-50 text-3xl font-bold mb-4 justify-center">
+        <div className="text-center text-m">
+        Emergency data for Pauri
+        </div>
+      </footer>
 
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Table View */}
-        <div className="flex-1 overflow-x-auto rounded-lg shadow">
+        <div className="flex-1 mt-10 overflow-x-auto rounded-lg shadow">
           <table className="min-w-full bg-white dark:bg-gray-800">
             <thead>
               <tr className="bg-gray-200 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-100">
@@ -131,7 +156,20 @@ export default function EmergencyDashboard() {
                     {new Date(incident.time).toLocaleString()}
                   </td>
                   <td className="px-4 py-2 text-gray-600">{incident.type}</td>
-                  <td className="px-4 py-2 text-gray-600">{incident.status}</td>
+                  <td className="px-4 py-2 flex items-center gap-2 text-gray-600">
+                    <span
+                      className={`h-3 w-3 rounded-full ${
+                        incident.status === "New"
+                          ? "bg-green-500"
+                          : incident.status === "In Progress"
+                          ? "bg-orange-500"
+                          : incident.status === "Resolved"
+                          ? "bg-green-500"
+                          : "bg-gray-400"
+                      }`}
+                    ></span>
+                    {incident.status}
+                  </td>
                   <td className="px-4 py-2 text-gray-600">
                     <button
                       className="text-blue-500 underline"
@@ -147,7 +185,7 @@ export default function EmergencyDashboard() {
         </div>
 
         {/* Map View */}
-        <div className="flex-1 h-[500px] z-10 m-2 border-4 border-gray-700 rounded-xl shadow">
+        <div className="mt-10 flex-1 h-[500px] z-10 border-4 border-gray-700 rounded-xl shadow">
           <MapContainer
             center={[30.5937, 78.9629]} // Initial center
             zoom={13}
@@ -221,7 +259,20 @@ export default function EmergencyDashboard() {
             >
               ✕
             </button>
-            <h2 className="text-xl font-bold mb-4">User Detail</h2>
+            <div className="flex items-center justify-center mb-4">
+              <span
+                className={`h-3 w-3 rounded-full mr-2 ${
+                  selectedUser.status === "New"
+                    ? "bg-green-500"
+                    : selectedUser.status === "In Progress"
+                    ? "bg-orange-500"
+                    : selectedUser.status === "Resolved"
+                    ? "bg-green-500"
+                    : "bg-gray-400"
+                }`}
+              ></span>
+              <h2 className="text-xl font-bold">User Detail</h2>
+            </div>
 
             <img
               src={`https://randomuser.me/api/portraits/men/${Math.min(
@@ -246,22 +297,39 @@ export default function EmergencyDashboard() {
               <p>
                 <strong>Status:</strong>
                 <div className="mt-1">
-                  {["New", "In Progress", "Resolved"].map((status) => (
-                    <label
-                      key={status}
-                      className="inline-flex items-center mr-4"
-                    >
-                      <input
-                        type="radio"
-                        className="form-radio text-blue-600"
-                        name="status"
-                        value={status}
-                        checked={selectedUser.status === status}
-                        onChange={() => handleStatusChange(status)}
-                      />
-                      <span className="ml-1">{status}</span>
-                    </label>
-                  ))}
+                  {["New", "In Progress", "Resolved", "Reopen the case"]
+                    .filter((statusOption) => {
+                      const currentStatus = selectedUser.status;
+                      if (currentStatus === "In Progress") {
+                        return (
+                          statusOption !== "New" &&
+                          statusOption !== "Reopen the case"
+                        );
+                      } else if (currentStatus === "Resolved") {
+                        return ["Resolved", "Reopen the case"].includes(
+                          statusOption
+                        );
+                      } else if (currentStatus.status === "new") {
+                        return statusOption !== "Reopen the case";
+                      }
+                      return true; // Show all when status is "New"
+                    })
+                    .map((status) => (
+                      <label
+                        key={status}
+                        className="inline-flex items-center mr-4"
+                      >
+                        <input
+                          type="radio"
+                          className="form-radio text-blue-600"
+                          name="status"
+                          value={status}
+                          checked={selectedUser.status === status}
+                          onChange={() => handleStatusChange(status)}
+                        />
+                        <span className="ml-1">{status}</span>
+                      </label>
+                    ))}
                 </div>
               </p>
               <p>
@@ -275,6 +343,13 @@ export default function EmergencyDashboard() {
           </div>
         </div>
       )}
+      {/* Footer */}
+      <footer className="fixed bottom-0 left-0 w-full bg-gray-800 text-white py-3 shadow-md z-50">
+        <div className="text-center text-m">
+          &copy; {new Date().getFullYear()} Emergency Tracker | Built with ❤️
+          using React & Leaflet
+        </div>
+      </footer>
     </div>
   );
 }

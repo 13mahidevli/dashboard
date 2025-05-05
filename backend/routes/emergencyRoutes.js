@@ -11,6 +11,23 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Server Error" });
   }
 });
+
+router.put("/:id", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    const updated = await Emergency.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    );
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
 router.post("/", async (req, res) => {
   const { name, location, time, type, status } = req.body;
 
