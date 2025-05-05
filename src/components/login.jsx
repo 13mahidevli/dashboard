@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 export default function LoginForm({ onLogin }) {
-  const [username, setUsername] = useState("");
+  const [email, setemail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = async (e) => {
@@ -10,7 +10,7 @@ export default function LoginForm({ onLogin }) {
       const res = await fetch("http://localhost:3000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
       if (!res.ok) throw new Error("Login failed");
 
@@ -23,25 +23,47 @@ export default function LoginForm({ onLogin }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-md mx-auto mt-20">
-      <h2 className="text-2xl mb-4">Login</h2>
-      <input
-        type="text"
-        placeholder="Username"
-        className="block w-full mb-3 p-2 border"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        className="block w-full mb-3 p-2 border"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button type="submit" className="bg-blue-600 text-white px-4 py-2">
-        Login
-      </button>
-    </form>
+    <>
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="max-w-md w-full bg-slate-400 p-8 rounded-lg shadow-lg">
+          <footer className="fixed top-0 font-bold left-0 w-full bg-gray-800 text-white py-3 shadow-md z-50 text-lg ">
+            <div className="text-center text-m">
+              Log-In
+            </div>
+          </footer>
+          <header className="text-center text-3xl font-bold text-white mb-6">
+            FORM
+          </header>
+          <form onSubmit={handleSubmit}>
+            <input
+              type="text"
+              placeholder="Email"
+              className="block w-full mb-3 p-2 border border-gray-300 rounded"
+              value={email}
+              onChange={(e) => setemail(e.target.value)}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              className="block w-full mb-3 p-2 border border-gray-300 rounded"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            >
+              Login
+            </button>
+          </form>
+        </div>
+        <footer className="fixed bottom-0 left-0 w-full bg-gray-800 text-white py-3 shadow-md z-50">
+          <div className="text-center text-m">
+            &copy; {new Date().getFullYear()} Log-in | Built with ❤️
+            using React
+          </div>
+        </footer>
+      </div>
+    </>
   );
 }
