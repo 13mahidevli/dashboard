@@ -127,20 +127,20 @@ export default function EmergencyDashboard({ token, onLogout }) {
   return (
     <div className="p-4 space-y-6  min-h-screen">
       <header className="fixed top-0 left-0 w-full bg-gray-800 text-white py-3 shadow-md z-50 text-3xl font-bold mb-4 justify-center">
-        <div className="text-center text-m">
+        <div className="text-center font-sans font-light text-m">
           Emergency data for Pauri
         </div>
         <button
           onClick={onLogout}
-          className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded"
+          className="absolute top-2 right-2 bg-red-500/70 text-white text-sm h-12 w-24 rounded"
         >
           Logout
         </button>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row  gap-4">
         {/* Table View */}
-        <div className="flex-1 mt-10 overflow-x-auto rounded-lg shadow">
+        <div className="flex-1 mt-10 bg-white h-[600px] overflow-x-auto rounded-lg shadow">
           <table className="min-w-full bg-white dark:bg-gray-800">
             <thead>
               <tr className="bg-gray-200 dark:bg-gray-700 text-left text-sm font-semibold text-gray-700 dark:text-gray-100">
@@ -200,11 +200,11 @@ export default function EmergencyDashboard({ token, onLogout }) {
         </div>
 
         {/* Map View */}
-        <div className="mt-10 flex-1 h-[500px] z-10 border-4 border-gray-700 rounded-xl shadow">
+        <div className="mt-10 flex-1 h-screen z-10 border-4 border-gray-700 rounded-xl shadow">
           <MapContainer
             center={[30.5937, 78.9629]} // Initial center
             zoom={13}
-            className="w-full h-full rounded-xl"
+            className="w-full h-screen rounded-xl"
           >
             <MapCenterUpdater
               position={
@@ -357,13 +357,6 @@ export default function EmergencyDashboard({ token, onLogout }) {
           </div>
         </div>
       )}
-      {/* Footer */}
-      <footer className="fixed bottom-0 left-0 w-full bg-gray-800 text-white py-3 shadow-md z-50">
-        <div className="text-center text-m">
-          &copy; {new Date().getFullYear()} Emergency Tracker | Built with ❤️
-          using React & Leaflet
-        </div>
-      </footer>
     </div>
   );
 }
